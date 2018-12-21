@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Face Recognition</title>
+</head>
+<body>
+<div>
+    <form enctype="multipart/form-data" id="uploadForm">
+        <div>
+            <input type="file" name="file"/>
+            <button type="button" id="btn_image" onclick="uploadImage()">UpLoad</button>
+        </div>
+    </form>
+</div>
+
+<div>
+    <button type="button" id="btn_camera" onclick="getMedia()">开启摄像头</button>
+    <br/>
+    <video height="180" width="240" autoplay="autoplay" id="videoCamera"></video>
+    <hr/>
+    <button type="button" id="btn_fr" onclick="startUpVideo()">人脸识别</button>
+    <br/>
+    <img id="output" src="">
+    <canvas hidden="hidden" height="180" width="240" id="hidden"></canvas>
+    <hr/>
+</div>
+
+<script type="text/javascript" src="/static/js/jquery-3.3.1.min.js"></script>
+<script type="text/javascript">
+    var uploadImage = function () {
+        var formData = new FormData($('#uploadForm')[0]);
+        $.ajax({
+            url: '{{url_for("uploadImage")}}',
+            type: "POST",
+            data: formData,
+            async: true,
+            cashe: false,
+            contentType: false,
+            processData: false,
+            success: function (returndata) {
+                alert('upload sucess!')
+
+            },
+            error: function (returndata) {
+                alert('upload failed!')
+            }
+        });
+    }
+</script>
+
+<script type="text/javascript">
+    var video = document.querySelector('video');
+    var audio, audioType;
+
+    var canvas = document.getElementById('hidden');
+    var context = canvas.getContext('2d');
+
+    navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;
+    window.URL = window.URL || window.webkitURL || window.mozURL || window.msURL;
+
+    var exArray = []; //存储设备源ID
+    navigator.mediaDevices.enumerateDevices().then(function(mediaDeviceInfos) {
+        for (var i = 0; i != mediaDeviceInfos.length; ++i) {
+            var sourceInfo = mediaDeviceInfos[i];
+            //这里会遍历audio,video，所以要加以区分
+            if (sourceInfo.kind === 'video') {
+                exArray.push(sourceInfo.id);
+            }
+        }
+    })
+    // MediaStreamTrack.getSources(function (sourceInfos) {
+    //     for (var i = 0; i != sourceInfos.length; ++i) {
+    //         var sourceInfo = sourceInfos[i];
+    //         //这里会遍历audio,video，所以要加以区分
+    //         if (sourceInfo.kind === 'video') {
+    //             exArray.push(sourceInfo.id);
+    //         }
+    //     }
+    // });
+
+    function getMedia() {
+        if (navigator.getUserMedia) {
+            navigator.getUserMedia({
+                'video': {
+                    'optional': [{
+                        'sourceId': exArray[1] //0为前置摄像头，1为后置
+                    }]
+                },
+                'audio': true
+            }, successFunc, errorFunc);    //success是获取成功的回调函数
+        }
+        else {
+            alert('Native device media streaming (getUserMedia) not supported in this browser.');
+        }
+    }
+
+    function successFunc(stream) {
+        //alert('Succeed to get media!');
+        if (video.mozSrcObject !== undefined) {
+            //Firefox中，video.mozSrcObject最初为null，而不是未定义的，我们可以靠这个来检测Firefox的支持
+            video.mozSrcObject = stream;
+        }
+        else {
+            video.src = window.URL && window.URL.createObjectURL(stream) || stream;
+        }
+
+        //video.play();
+
+        // 音频
+        // audio = new Audio();
+        // audioType = getAudioType(audio);
+        // if (audioType) {
+        //     audio.src = 'polaroid.' + audioType;
+        //     audio.play();
+        // }
+    }
+
+    function errorFunc(e) {
+        alert('Error！' + e);
+    }
+
+    video.addEventListener('play', function () {
+        uploadVideo(video,context);
+    }, false);
+
+    //视频
+    function startUpVideo() {
+        uploadVideo(video,context);
+    }
+
+    function uploadVideo(video,context) {
+        window.setInterval(function () {
+            context.drawImage(video, 0,0,240,180);
+            var frame = context.getImageData(0, 0,240,180);
+            var array = frame.data.join(',');
+            var data = {"img": array, "height": video.height, "width": video.width};
+            $.ajax({
+                url: '{{url_for("getVideo")}}',
+                type: "POST",
+                data: JSON.stringify(data),
+                async: true,
+                cashe: false,
+                contentType: false,
+                processData: false,
+                success: function (returndata) {
+                    var img=document.getElementById('output');
+                    img.src='data:image/jpeg;base64,'+returndata;
+                },
+                error: function (returndata) {
+                }
+            });
+        }, 60);
+    }
+</script>
+
+</body>
+</html>
